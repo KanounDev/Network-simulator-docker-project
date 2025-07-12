@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Router Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
+    <div class="container mx-auto p-6 bg-white rounded-lg shadow-lg max-w-2xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Router Configuration</h1>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-4 p-4 rounded {{ 'bg-green-100 text-green-800' if category == 'success' else 'bg-red-100 text-red-800' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Add Address Form -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Add Address</h2>
+            <form action="{{ url_for('add_address') }}" method="POST" class="grid grid-cols-1 gap-4">
+                <div>
+                    <label for="address" class="block text-gray-600">Address/Prefix:</label>
+                    <input type="text" id="address" name="address" placeholder="e.g., 192.168.1.1/24" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="interface" class="block text-gray-600">Interface:</label>
+                    <select id="interface" name="interface" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% for interface in interfaces %}
+                            <option value="{{ interface }}">{{ interface }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Submit</button>
+            </form>
+        </div>
+
+        <!-- Add Static Route Form -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Add Static Route</h2>
+            <form action="{{ url_for('add_route') }}" method="POST" class="grid grid-cols-1 gap-4">
+                <div>
+                    <label for="destination" class="block text-gray-600">Destination Network/Prefix:</label>
+                    <input type="text" id="destination" name="destination" placeholder="e.g., 10.0.0.0/24" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="next_hop" class="block text-gray-600">Next Hop IP:</label>
+                    <input type="text" id="next_hop" name="next_hop" placeholder="e.g., 192.168.1.2" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Submit</button>
+            </form>
+        </div>
+
+        <!-- Addresses Table -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Addresses</h2>
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">Address/Prefix</th>
+                        <th class="p-2 text-left">Interface</th>
+                        <th class="p-2 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for addr in addresses %}
+                        <tr class="border-b">
+                            <td class="p-2">{{ addr.address }}</td>
+                            <td class="p-2">{{ addr.interface }}</td>
+                            <td class="p-2">
+                                <button onclick="openEditAddressModal('{{ loop.index0 }}', '{{ addr.address }}', '{{ addr.interface }}')" class="text-blue-500 hover:underline">Edit</button>
+                                <a href="{{ url_for('delete_address', index=loop.index0) }}" class="text-red-500 hover:underline ml-4">Delete</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Static Routes Table -->
+        <div>
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Static Routes</h2>
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 text-left">Destination Network/Prefix</th>
+                        <th class="p-2 text-left">Next Hop IP</th>
+                        <th class="p-2 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for route in routes %}
+                        <tr class="border-b">
+                            <td class="p-2">{{ route.destination }}</td>
+                            <td class="p-2">{{ route.next_hop }}</td>
+                            <td class="p-2">
+                                <button onclick="openEditRouteModal('{{ loop.index0 }}', '{{ route.destination }}', '{{ route.next_hop }}')" class="text-blue-500 hover:underline">Edit</button>
+                                <a href="{{ url_for('delete_route', index=loop.index0) }}" class="text-red-500 hover:underline ml-4">Delete</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Address Modal -->
+        <div id="editAddressModal" class="modal hidden">
+            <div class="modal-content max-w-md">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">Edit Address</h2>
+                <form id="editAddressForm" method="POST" class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label for="edit_address" class="block text-gray-600">Address/Prefix:</label>
+                        <input type="text" id="edit_address" name="address" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="edit_interface" class="block text-gray-600">Interface:</label>
+                        <select id="edit_interface" name="interface" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {% for interface in interfaces %}
+                                <option value="{{ interface }}">{{ interface }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex justify-end gap-4">
+                        <button type="button" onclick="closeModal('editAddressModal')" class="bg-gray-300 text-gray-800 p-2 rounded hover:bg-gray-400">Cancel</button>
+                        <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Edit Route Modal -->
+        <div id="editRouteModal" class="modal hidden">
+            <div class="modal-content max-w-md">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">Edit Static Route</h2>
+                <form id="editRouteForm" method="POST" class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label for="edit_destination" class="block text-gray-600">Destination Network/Prefix:</label>
+                        <input type="text" id="edit_destination" name="destination" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="edit_next_hop" class="block text-gray-600">Next Hop IP:</label>
+                        <input type="text" id="edit_next_hop" name="next_hop" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex justify-end gap-4">
+                        <button type="button" onclick="closeModal('editRouteModal')" class="bg-gray-300 text-gray-800 p-2 rounded hover:bg-gray-400">Cancel</button>
+                        <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            document.getElementById('editAddressModal').classList.add('hidden');
+            document.getElementById('editRouteModal').classList.add('hidden');
+        };
+
+        function openEditAddressModal(index, address, interface) {
+            document.getElementById('editAddressForm').action = `/edit_address/${index}`;
+            document.getElementById('edit_address').value = address;
+            document.getElementById('edit_interface').value = interface;
+            document.getElementById('editAddressModal').classList.remove('hidden');
+        }
+
+        function openEditRouteModal(index, destination, next_hop) {
+            document.getElementById('editRouteForm').action = `/edit_route/${index}`;
+            document.getElementById('edit_destination').value = destination;
+            document.getElementById('edit_next_hop').value = next_hop;
+            document.getElementById('editRouteModal').classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

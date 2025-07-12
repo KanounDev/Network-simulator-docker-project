@@ -1,0 +1,47 @@
+{
+    "topologies": [
+        {
+            "name": "sample",
+            "nodes": [
+                {
+                    "id": 1,
+                    "type": "Host",
+                    "x": 139,
+                    "y": 82
+                },
+                {
+                    "id": 2,
+                    "type": "Router",
+                    "x": 363,
+                    "y": 91
+                },
+                {
+                    "id": 3,
+                    "type": "Host",
+                    "x": 173,
+                    "y": 182
+                },
+                {
+                    "id": 4,
+                    "type": "Switch",
+                    "x": 266,
+                    "y": 128
+                }
+            ],
+            "edges": [
+                {
+                    "source": 1,
+                    "target": 4
+                },
+                {
+                    "source": 3,
+                    "target": 4
+                },
+                {
+                    "source": 4,
+                    "target": 2
+                }
+            ]
+        }
+    ]
+}

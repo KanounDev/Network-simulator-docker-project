@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center">
+    <div class="container mx-auto p-6 bg-white rounded-lg shadow-lg max-w-2xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Host Configuration</h1>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-4 p-4 rounded {{ 'bg-green-100 text-green-800' if category == 'success' else 'bg-red-100 text-red-800' }} whitespace-pre-line">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Configure Interface Form -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Configure Interface</h2>
+            <form action="{{ url_for('set_interface') }}" method="POST" class="grid grid-cols-1 gap-4">
+                <div>
+                    <label for="ip_address" class="block text-gray-600">IP Address:</label>
+                    <input type="text" id="ip_address" name="ip_address" value="{{ interface.ip_address if interface else '' }}" placeholder="e.g., 192.168.1.2" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="subnet_mask" class="block text-gray-600">Subnet Mask:</label>
+                    <input type="text" id="subnet_mask" name="subnet_mask" value="{{ interface.subnet_mask if interface else '' }}" placeholder="e.g., 255.255.255.0" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="default_gateway" class="block text-gray-600">Default Gateway:</label>
+                    <input type="text" id="default_gateway" name="default_gateway" value="{{ interface.default_gateway if interface else '' }}" placeholder="e.g., 192.168.1.1" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex gap-4">
+                    <button type="submit" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Save</button>
+                    {% if interface %}
+                        <a href="{{ url_for('delete_interface') }}" class="bg-red-500 text-white p-2 rounded hover:bg-red-600">Delete</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <!-- Ping Form -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Ping Test</h2>
+            <form action="{{ url_for('ping') }}" method="POST" class="grid grid-cols-1 gap-4">
+                <div>
+                    <label for="target_ip" class="block text-gray-600">Target IP Address:</label>
+                    <input type="text" id="target_ip" name="target_ip" placeholder="e.g., 192.168.2.2" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="bg-green-500 text-white p-2 rounded hover:bg-green-600">Ping</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
