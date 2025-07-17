@@ -11,6 +11,7 @@ let nodes = [];
 let edges = [];
 let connectMode = false;
 let selectedNode = null;
+let maxNodeId = 0; // Track highest node ID
 
 const deviceImages = {
     Host: '/static/images/host.png',
@@ -20,7 +21,8 @@ const deviceImages = {
 
 function addDevice(type, x = 50, y = 50, nodeId = null) {
     return new Promise(resolve => {
-        const id = nodeId !== null ? nodeId : nodes.length + 1;
+        const id = nodeId !== null ? nodeId : maxNodeId + 1;
+        maxNodeId = Math.max(maxNodeId, id);
         const group = new Konva.Group({
             x: x,
             y: y,
@@ -71,7 +73,7 @@ function addDevice(type, x = 50, y = 50, nodeId = null) {
         };
         img.onerror = () => {
             console.error(`Failed to load image for ${type}`);
-            resolve(); // Proceed even if image fails
+            resolve();
         };
 
         // Handle click for connections
@@ -90,31 +92,73 @@ function addDevice(type, x = 50, y = 50, nodeId = null) {
             }
         });
         group.on('dblclick', () => {
-            fetch('/launch_node', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, type })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.url) {
-                        window.open(data.url, '_blank');
-                    } else {
-                        showMessage(data.error || 'Unknown error', 'error');
-                    }
+            if (type !== "Switch") {
+                fetch('/launch_node', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, type })
                 })
-                .catch(() => showMessage('Failed to open node UI', 'error'));
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.url) {
+                            window.open(data.url, '_blank');
+                        } else {
+                            showMessage(data.error || 'Unknown error', 'error');
+                        }
+                    })
+                    .catch(() => showMessage('Failed to open node UI', 'error'));
+            }
         });
         // Handle right-click to delete
         group.on('contextmenu', (e) => {
             e.evt.preventDefault();
-            if (confirm(`Delete ${type}-${id}?`)) {
-                nodes = nodes.filter(node => node.id !== id);
-                edges = edges.filter(edge => edge.source !== id && edge.target !== id);
-                group.destroy();
-                redrawEdges();
-                layer.draw();
-            }
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+            // Create dialog
+            const dialog = document.createElement('div');
+            dialog.className = 'bg-white rounded-lg p-6 shadow-lg max-w-sm w-full';
+            dialog.innerHTML = `
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Delete ${type}-${id}?</h3>
+        <div class="flex justify-end gap-3">
+            <button id="cancelDelete" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-200">Cancel</button>
+            <button id="confirmDelete" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-200">Confirm</button>
+        </div>
+    `;
+
+            // Append dialog to overlay and overlay to body
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            // Cancel button
+            document.getElementById('cancelDelete').addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            });
+
+            // Confirm button
+            document.getElementById('confirmDelete').addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                fetch('/delete_node', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, id })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            showMessage(data.error, 'error');
+                            return;
+                        }
+                        nodes = nodes.filter(node => node.id !== id);
+                        edges = edges.filter(edge => edge.source !== id && edge.target !== id);
+                        group.destroy();
+                        redrawEdges();
+                        layer.draw();
+                        showMessage(data.message, 'success');
+                    })
+                    .catch(() => showMessage('Error deleting node', 'error'));
+            });
         });
     });
 }
@@ -156,27 +200,21 @@ function toggleConnectMode() {
 }
 
 function showMessage(text, type = 'success') {
-    const messages = document.getElementById('messages');
-    messages.innerHTML = `<div class="p-4 rounded ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${text}</div>`;
-    setTimeout(() => messages.innerHTML = '', 3000);
+    const toast = document.createElement('div');
+    toast.innerText = text;
+    toast.className = `fixed bottom-6 left-1/2 transform -translate-x-1/2 
+        px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300 
+        ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300); // Remove after fade-out
+    }, 3000);
 }
 
-// Populate topology dropdown
-function updateTopologyDropdown() {
-    fetch('/list_topologies')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('topologySelect');
-            select.innerHTML = '<option value="">Select a topology</option>';
-            data.topologies.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                select.appendChild(option);
-            });
-        })
-        .catch(() => showMessage('Error fetching topologies', 'error'));
-}
+
 
 // Event Listeners
 document.getElementById('addHost').addEventListener('click', () => addDevice('Host'));
@@ -185,12 +223,7 @@ document.getElementById('addSwitch').addEventListener('click', () => addDevice('
 document.getElementById('connectMode').addEventListener('click', toggleConnectMode);
 
 document.getElementById('saveTopology').addEventListener('click', () => {
-    const name = document.getElementById('topologyName').value.trim();
-    if (!name) {
-        showMessage('Please enter a topology name', 'error');
-        return;
-    }
-    const topology = { name, nodes, edges };
+    const topology = { nodes, edges };
     fetch('/save_topology', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -199,22 +232,16 @@ document.getElementById('saveTopology').addEventListener('click', () => {
         .then(response => response.json())
         .then(data => {
             showMessage(data.message || data.error, data.error ? 'error' : 'success');
-            updateTopologyDropdown();
         })
         .catch(() => showMessage('Error saving topology', 'error'));
 });
 
 document.getElementById('loadTopology').addEventListener('click', async () => {
-    const name = document.getElementById('topologySelect').value;
-    if (!name) {
-        showMessage('Please select a topology', 'error');
-        return;
-    }
     try {
         const response = await fetch('/load_topology', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({})
         });
         const data = await response.json();
         if (data.error) {
@@ -223,8 +250,8 @@ document.getElementById('loadTopology').addEventListener('click', async () => {
         }
         nodes = data.nodes || [];
         edges = data.edges || [];
+        maxNodeId = Math.max(0, ...nodes.map(n => n.id));
         layer.destroyChildren();
-        // Load all nodes and wait for images
         await Promise.all(nodes.map(node => addDevice(node.type, node.x, node.y, node.id)));
         redrawEdges();
         showMessage('Topology loaded successfully');
@@ -234,13 +261,49 @@ document.getElementById('loadTopology').addEventListener('click', async () => {
 });
 
 document.getElementById('clearCanvas').addEventListener('click', () => {
-    if (confirm('Clear the canvas?')) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'bg-white rounded-lg p-6 shadow-lg max-w-sm w-full';
+    dialog.innerHTML = `
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Clear the topology?</h3>
+        <div class="flex justify-end gap-3">
+            <button id="cancelClear" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-200">Cancel</button>
+            <button id="confirmClear" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-200">Confirm</button>
+        </div>
+    `;
+
+    // Append dialog to overlay and overlay to body
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Cancel button
+    document.getElementById('cancelClear').addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+
+    // Confirm button
+    document.getElementById('confirmClear').addEventListener('click', () => {
+        document.body.removeChild(overlay);
         nodes = [];
         edges = [];
-        layer.destroyChildren();
-        layer.draw();
-        showMessage('Canvas cleared');
-    }
+        fetch('/clear_topology', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nodes, edges })
+        })
+            .then(response => response.json())
+            .then(data => {
+                showMessage(data.message || data.error, data.error ? 'error' : 'success');
+                maxNodeId = 0;
+                layer.destroyChildren();
+                layer.draw();
+            })
+            .catch(() => showMessage('Error clearing topology', 'error'));
+    });
 });
 
 // Handle canvas resize
@@ -248,6 +311,3 @@ window.addEventListener('resize', () => {
     stage.width(document.getElementById('canvas-container').offsetWidth);
     stage.draw();
 });
-
-// Initialize topology dropdown
-updateTopologyDropdown();
